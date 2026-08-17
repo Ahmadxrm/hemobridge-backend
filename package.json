@@ -1,0 +1,68 @@
+{
+  "name": "hemobridge-backend",
+  "version": "1.0.0",
+  "description": "HemoBridge backend API — healthcare blood coordination platform",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "migrate": "node src/database/migrate.js",
+    "migrate:rollback": "node src/database/migrate.js rollback",
+    "seed": "node src/database/seeds/index.js",
+    "test": "jest --runInBand --forceExit",
+    "test:coverage": "jest --runInBand --forceExit --coverage",
+    "test:watch": "jest --watch --runInBand",
+    "lint": "eslint src/ --ext .js"
+  },
+  "keywords": [
+    "blood-bank",
+    "healthcare",
+    "blood-donation",
+    "hemobridge"
+  ],
+  "author": "HemoBridge Team",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "argon2": "^0.31.2",
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.1",
+    "express-slow-down": "^2.0.3",
+    "helmet": "^8.0.0",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.0",
+    "uuid": "^10.0.0",
+    "winston": "^3.15.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.7",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/server.js",
+      "!src/database/seeds/**"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 60,
+        "functions": 70,
+        "lines": 70,
+        "statements": 70
+      }
+    }
+  }
+}

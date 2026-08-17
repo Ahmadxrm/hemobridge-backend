@@ -1,0 +1,51 @@
+'use strict';
+
+const Joi = require('joi');
+
+const createRequestSchema = Joi.object({
+  bloodType: Joi.string().valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-').required(),
+  unitsNeeded: Joi.number().integer().min(1).required(),
+  urgency: Joi.string().valid('ROUTINE', 'URGENT', 'CRITICAL').default('URGENT'),
+  patientInfo: Joi.string().optional(),
+  notes: Joi.string().optional(),
+  fulfillingOrgId: Joi.string().uuid().optional(),
+});
+
+const respondRequestSchema = Joi.object({
+  status: Joi.string().valid('APPROVED', 'REJECTED').required(),
+  responseNotes: Joi.string().optional(),
+  rejectionReason: Joi.string().when('status', {
+    is: 'REJECTED',
+    then: Joi.required(),
+    otherwise: Joi.optional()
+  }),
+});
+
+const updateRequestStatusSchema = Joi.object({
+  status: Joi.string().required(),
+  notes: Joi.string().optional(),
+});
+
+const transferDetailsSchema = Joi.object({
+  courierName: Joi.string().optional(),
+  courierPhone: Joi.string().optional(),
+  vehicleNumber: Joi.string().optional(),
+  trackingReference: Joi.string().optional(),
+  estimatedArrival: Joi.date().iso().optional(),
+  notes: Joi.string().optional(),
+});
+
+const requestQuerySchema = Joi.object({
+  status: Joi.string().optional(),
+  bloodType: Joi.string().valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-').optional(),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+});
+
+module.exports = {
+  createRequestSchema,
+  respondRequestSchema,
+  updateRequestStatusSchema,
+  transferDetailsSchema,
+  requestQuerySchema,
+};
