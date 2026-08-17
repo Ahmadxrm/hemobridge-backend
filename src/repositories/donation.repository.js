@@ -123,14 +123,28 @@ const findByOrganization = async (orgId, { status, page = 1, limit = 10 }) => {
   return { data: dataResult.rows, total, page, limit, totalPages: Math.ceil(total / limit) };
 };
 
+const updateResponse = async (id, fields) => {
+  const keys = Object.keys(fields);
+  if (keys.length === 0) return getResponse(id, null);
+  const sets = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+  const result = await query(`
+    UPDATE donor_responses SET ${sets}, updated_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `, [id, ...Object.values(fields)]);
+  return result.rows[0];
+};
+
 module.exports = {
   create,
   findById,
   findMatches,
   createResponse,
+  updateResponse,
   getResponse,
   getProgress,
   close,
   getNotifiedDonors,
   findByOrganization
 };
+

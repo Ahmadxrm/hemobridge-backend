@@ -33,7 +33,12 @@ exports.renewSubscription = async (req, res, next) => {
 exports.getPayments = async (req, res, next) => {
   try {
     const result = await subscriptionService.getPayments(req.params.id, req.query, req.user);
-    return sendPaginated(res, 200, 'Payments fetched successfully', result.data, result.meta);
+    return sendPaginated(res, 200, 'Payments fetched successfully', result.data, {
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
+      totalPages: result.totalPages,
+    });
   } catch (err) {
     next(err);
   }

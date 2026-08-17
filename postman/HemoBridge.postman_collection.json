@@ -1,0 +1,712 @@
+{
+  "info": {
+    "_postman_id": "hemobridge-v1-collection",
+    "name": "HemoBridge API v1",
+    "description": "Complete HemoBridge backend API collection. Base URL: http://localhost:5000/api/v1\n\nAuthentication: Use the Login endpoint to get a token, then set it as Bearer Token in the collection-level Authorization tab.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api/v1" },
+    { "key": "token", "value": "" },
+    { "key": "orgId", "value": "" },
+    { "key": "requestId", "value": "" },
+    { "key": "donationRequestId", "value": "" },
+    { "key": "inventoryId", "value": "" },
+    { "key": "donorId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/../health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Organization (Hospital)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register/organization",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lagos General Hospital\",\n  \"email\": \"admin@lagosgeneral.ng\",\n  \"phone\": \"08012345678\",\n  \"password\": \"SecurePass123!\",\n  \"role\": \"HOSPITAL\",\n  \"address\": \"1 Hospital Road, Lagos\",\n  \"state\": \"Lagos\",\n  \"city\": \"Lagos\",\n  \"registrationNumber\": \"HOS-001\",\n  \"hospitalType\": \"GENERAL\",\n  \"ownershipType\": \"GOVERNMENT\",\n  \"representativeName\": \"Dr. Adeola Johnson\",\n  \"representativeEmail\": \"adeola@lagosgeneral.ng\",\n  \"representativePhone\": \"08098765432\",\n  \"latitude\": 6.5244,\n  \"longitude\": 3.3792\n}"
+            }
+          }
+        },
+        {
+          "name": "Register Organization (Blood Bank)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register/organization",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lagos Blood Bank\",\n  \"email\": \"info@lagosbloodbank.ng\",\n  \"phone\": \"07011223344\",\n  \"password\": \"BloodBank123!\",\n  \"role\": \"BLOOD_BANK\",\n  \"address\": \"45 Blood Bank Avenue, Lagos\",\n  \"state\": \"Lagos\",\n  \"city\": \"Victoria Island\",\n  \"latitude\": 6.4281,\n  \"longitude\": 3.4219\n}"
+            }
+          }
+        },
+        {
+          "name": "Register Donor",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register/donor",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Emeka Okafor\",\n  \"email\": \"emeka@example.com\",\n  \"phone\": \"08055667788\",\n  \"password\": \"Donor123!\",\n  \"bloodGroup\": \"O\",\n  \"rhesusFactor\": \"positive\",\n  \"dateOfBirth\": \"1990-05-15\",\n  \"gender\": \"MALE\",\n  \"address\": \"12 Donor Street, Lagos\",\n  \"state\": \"Lagos\",\n  \"lga\": \"Ikeja\",\n  \"preferredChannel\": \"SMS\",\n  \"consentGiven\": true,\n  \"dataSharingConsent\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (r.data && r.data.token) {",
+                  "  pm.collectionVariables.set('token', r.data.token);",
+                  "  console.log('Token saved:', r.data.token.substring(0, 30) + '...');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@hemobridge.com\",\n  \"password\": \"AdminPass123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Me (Current User)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/otp/send",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{donorId}}\",\n  \"purpose\": \"EMAIL_VERIFICATION\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/otp/verify",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{donorId}}\",\n  \"otp\": \"123456\",\n  \"purpose\": \"EMAIL_VERIFICATION\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/forgot-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"emeka@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/reset-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"<reset_token_from_email>\",\n  \"password\": \"NewSecurePass123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/logout",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Blood Search",
+      "item": [
+        {
+          "name": "Search Blood Nearby",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/blood/search?type=O%2B&lat=6.5244&lng=3.3792&radius=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["blood", "search"],
+              "query": [
+                { "key": "type", "value": "O+" },
+                { "key": "lat", "value": "6.5244" },
+                { "key": "lng", "value": "3.3792" },
+                { "key": "radius", "value": "50" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Get Inventory Dashboard",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{orgId}}/dashboard",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "List Inventory",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{orgId}}?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "{{orgId}}"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Add Inventory Unit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (r.data && r.data.id) pm.collectionVariables.set('inventoryId', r.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/{{orgId}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bloodType\": \"O+\",\n  \"quantity\": 10,\n  \"expiryDate\": \"2026-12-31\",\n  \"collectionDate\": \"2026-08-15\",\n  \"componentType\": \"WHOLE_BLOOD\",\n  \"batchNumber\": \"BATCH-001\",\n  \"storageLocation\": \"Fridge A\",\n  \"notes\": \"Fresh donation\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Inventory Unit",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/inventory/{{orgId}}/{{inventoryId}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 8,\n  \"notes\": \"Used 2 units for patient\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Inventory Unit",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/inventory/{{orgId}}/{{inventoryId}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Emergency Requests",
+      "item": [
+        {
+          "name": "List Blood Requests",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/requests?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["requests"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "PENDING", "disabled": true }
+              ]
+            },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Create Emergency Blood Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (r.data && r.data.id) pm.collectionVariables.set('requestId', r.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/requests",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bloodType\": \"O+\",\n  \"unitsNeeded\": 3,\n  \"urgency\": \"CRITICAL\",\n  \"patientInfo\": \"Patient: John Doe, Ward 4B\",\n  \"notes\": \"Post-surgery transfusion required\",\n  \"fulfillingOrgId\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Blood Request",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/requests/{{requestId}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Respond to Blood Request (Approve)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/requests/{{requestId}}/respond",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\",\n  \"responseNotes\": \"We have the units available and ready for dispatch.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Respond to Blood Request (Reject)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/requests/{{requestId}}/respond",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"REJECTED\",\n  \"rejectionReason\": \"Insufficient stock of requested blood type.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Add Transfer Details (Dispatch)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/requests/{{requestId}}/transfer",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courierName\": \"FastMed Logistics\",\n  \"courierPhone\": \"09012345678\",\n  \"vehicleNumber\": \"LAG-123-AB\",\n  \"trackingReference\": \"HBTRANSFER001\",\n  \"estimatedArrival\": \"2026-08-18T14:00:00Z\",\n  \"notes\": \"Handle with care — blood products\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Confirm Receipt",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/requests/{{requestId}}/confirm-received",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Donation Requests (Donor Mobilisation)",
+      "item": [
+        {
+          "name": "Create Donation Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (r.data && r.data.id) pm.collectionVariables.set('donationRequestId', r.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/donation-requests",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bloodType\": \"A+\",\n  \"unitsNeeded\": 5,\n  \"urgency\": \"URGENT\",\n  \"message\": \"We urgently need A+ blood for our ICU patients\",\n  \"searchRadiusKm\": 30,\n  \"latitude\": 6.5244,\n  \"longitude\": 3.3792,\n  \"expiresAt\": \"2026-08-25T23:59:59Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Donation Request",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/donation-requests/{{donationRequestId}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Find Matching Donors",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/donation-requests/{{donationRequestId}}/matches",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Notify Matched Donors",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/donation-requests/{{donationRequestId}}/notify",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Donor — Submit Response (Accept)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/donation-requests/{{donationRequestId}}/respond",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACCEPTED\",\n  \"message\": \"I can donate tomorrow morning\",\n  \"availableDate\": \"2026-08-19\",\n  \"availableTime\": \"09:00\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Donor — Submit Response (Decline)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/donation-requests/{{donationRequestId}}/respond",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DECLINED\",\n  \"declineReason\": \"Donated last week — need to wait for recovery period.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Donation Request Progress",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/donation-requests/{{donationRequestId}}/progress",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Close Donation Request",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/donation-requests/{{donationRequestId}}/close",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Donors",
+      "item": [
+        {
+          "name": "Get Donor Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/donors/{{donorId}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Update Donor Profile",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/donors/{{donorId}}",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"50 New Address Street, Lagos\",\n  \"lga\": \"Surulere\",\n  \"preferredChannel\": \"WHATSAPP\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Donor Availability",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/donors/{{donorId}}/availability",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isAvailable\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Donor Donation History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/donors/{{donorId}}/history?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["donors", "{{donorId}}", "history"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get My Notifications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/notifications?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["notifications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Get Notification Preferences",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users/{{donorId}}/notification-preferences",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Update Notification Preferences",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/users/{{donorId}}/notification-preferences",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sms\": true,\n  \"whatsapp\": false,\n  \"email\": true,\n  \"voice\": false,\n  \"inApp\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscriptions & Payments",
+      "item": [
+        {
+          "name": "Get Subscription Plans",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/plans"
+          }
+        },
+        {
+          "name": "Create Subscription",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/subscriptions",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"<plan_id_from_get_plans>\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Organization Payments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{orgId}}/payments?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["organizations", "{{orgId}}", "payments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Paystack Webhook",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/payments/webhook",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-paystack-signature", "value": "<sha512_hmac_signature>" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"charge.success\",\n  \"data\": {\n    \"reference\": \"hb-<ref>\",\n    \"amount\": 1000000,\n    \"status\": \"success\",\n    \"customer\": { \"email\": \"org@example.com\" },\n    \"metadata\": { \"subscriptionId\": \"<sub_id>\", \"planId\": \"<plan_id>\", \"orgId\": \"<org_id>\" }\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get System Status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/status",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "List Organizations (Pending)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/organizations?status=PENDING_VERIFICATION&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "organizations"],
+              "query": [
+                { "key": "status", "value": "PENDING_VERIFICATION" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        },
+        {
+          "name": "Verify Organization",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/admin/organizations/{{orgId}}/verify",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"VERIFIED\",\n  \"notes\": \"All documents reviewed and verified\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reject Organization",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/admin/organizations/{{orgId}}/verify",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"REJECTED\",\n  \"rejectionReason\": \"Missing valid CAC registration certificate.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Suspend Organization",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/admin/organizations/{{orgId}}/verify",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\",\n  \"notes\": \"Suspended pending investigation of reported incident.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update User Status",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/admin/users/{{donorId}}/status",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\",\n  \"reason\": \"Violation of platform terms of service.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/audit-logs?page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "audit-logs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "50" },
+                { "key": "action", "value": "USER_LOGIN", "disabled": true },
+                { "key": "from", "value": "2026-08-01", "disabled": true },
+                { "key": "to", "value": "2026-08-31", "disabled": true }
+              ]
+            },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -325,13 +325,96 @@ async function notifyOrganizationVerified({ userId, orgName }) {
   });
 }
 
+/**
+ * Notify org users of a new emergency blood request targeting them.
+ * Called by request.service when a request specifies a fulfillingOrgId.
+ */
+async function notifyOrganizationOfRequest({ orgId, requestId, bloodType, urgency }) {
+  // Look up the org's user to find who to notify
+  const { query: dbQuery } = require('../../config/database');
+  const orgResult = await dbQuery('SELECT user_id FROM organizations WHERE id = $1', [orgId]);
+  if (!orgResult.rows[0]) return;
+
+  const userId = orgResult.rows[0].user_id;
+  const urgencyText = urgency === 'CRITICAL' ? '🚨 CRITICAL: ' : '';
+  const body = `${urgencyText}You have received a new emergency blood request for ${bloodType} blood (Request ID: ${requestId}). Log in to review and respond.`;
+
+  return dispatch({
+    userId,
+    channels: [NOTIFICATION_CHANNELS.EMAIL, NOTIFICATION_CHANNELS.IN_APP],
+    subject: `New Emergency Blood Request — ${bloodType}`,
+    body,
+    eventType: 'REQUEST_CREATED',
+    entityType: 'EMERGENCY_REQUEST',
+    entityId: requestId,
+  });
+}
+
+/**
+ * Notify requesting org of request status change.
+ */
+async function notifyRequestStatusChanged({ orgId, requestId, newStatus }) {
+  const { query: dbQuery } = require('../../config/database');
+  const orgResult = await dbQuery('SELECT user_id FROM organizations WHERE id = $1', [orgId]);
+  if (!orgResult.rows[0]) return;
+
+  return notifyRequestStatusChange({ userId: orgResult.rows[0].user_id, requestId, newStatus, orgName: 'HemoBridge' });
+}
+
+/**
+ * Notify a donor of a donation request.
+ * Called by donation.service with { donorId, donationRequestId, bloodType, urgency, message }
+ */
+async function notifyDonorOfDonationRequest({ donorId, donationRequestId, bloodType, urgency, message }) {
+  // donorId here is the donor's donor table ID, we need user_id
+  const { query: dbQuery } = require('../../config/database');
+  const donorResult = await dbQuery('SELECT user_id FROM donors WHERE id = $1', [donorId]);
+  if (!donorResult.rows[0]) return;
+
+  const urgencyText = urgency === 'CRITICAL' ? '🚨 CRITICAL EMERGENCY: ' : '';
+  const body = `${urgencyText}An organisation urgently needs ${bloodType} blood. ${message || ''} Log in to HemoBridge to respond to this donation request.`;
+
+  return dispatch({
+    userId: donorResult.rows[0].user_id,
+    channels: [NOTIFICATION_CHANNELS.SMS, NOTIFICATION_CHANNELS.IN_APP],
+    subject: 'Urgent Blood Donation Request',
+    body,
+    eventType: 'DONATION_REQUEST_CREATED',
+    entityType: 'DONATION_REQUEST',
+    entityId: donationRequestId,
+  });
+}
+
+/**
+ * Low stock alert — looks up org's user and notifies them.
+ * Called by inventory.service with { orgId, bloodType, currentStock, threshold }
+ */
+async function notifyLowStockAlert({ orgId, bloodType, currentStock, threshold }) {
+  const { query: dbQuery } = require('../../config/database');
+  const orgResult = await dbQuery('SELECT user_id, name FROM organizations WHERE id = $1', [orgId]);
+  if (!orgResult.rows[0]) return;
+
+  return notifyLowStock({
+    userId: orgResult.rows[0].user_id,
+    bloodType,
+    currentQuantity: currentStock,
+    threshold,
+    orgName: orgResult.rows[0].name,
+  });
+}
+
 module.exports = {
   dispatch,
   retryFailedNotifications,
   sendOTPNotification,
-  notifyDonorOfRequest,
-  notifyRequestStatusChange,
-  notifyLowStock,
-  sendPasswordResetEmail,
+  notifyDonorOfRequest, // legacy (uses donorUserId directly)
+  notifyDonorOfDonationRequest, // new — takes donorId (donor table pk)
+  notifyOrganizationOfRequest,
   notifyOrganizationVerified,
+  notifyRequestStatusChange,
+  notifyRequestStatusChanged,
+  notifyLowStock,
+  notifyLowStockAlert,
+  sendPasswordResetEmail,
 };
+

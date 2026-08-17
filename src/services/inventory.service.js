@@ -10,100 +10,172 @@ const { query } = require('../config/database');
 const logger = require('../utils/logger');
 
 async function createInventoryUnit(orgId, data, actorUser) {
-    if (actorUser.organizationId !== orgId) {
-        throw new AuthorizationError('Organization mismatch');
-    }
+  // Org ownership check — org users can only add to their own org
+  if (actorUser.organizationId && actorUser.organizationId !== orgId) {
+    throw new AuthorizationError('Organization mismatch');
+  }
 
-    if (new Date(data.expiryDate) <= new Date()) {
-        throw new BusinessRuleError('Expiry date must be in the future');
-    }
+  if (new Date(data.expiryDate) <= new Date()) {
+    throw new BusinessRuleError('Expiry date must be in the future');
+  }
 
-    data.unitsAvailable = data.quantity;
-    const unit = await inventoryRepo.create({ ...data, organizationId: orgId });
-    
-    await auditRepo.logEvent(AUDIT_EVENTS.INVENTORY_CREATED, {
-        actorId: actorUser.id,
-        targetId: unit.id,
-        details: { bloodType: unit.bloodType, quantity: unit.quantity }
-    });
+  const unitData = {
+    bloodType: data.bloodType,
+    quantity: data.quantity,
+    unitsAvailable: data.quantity,
+    expiryDate: data.expiryDate,
+    collectionDate: data.collectionDate,
+    componentType: data.componentType || 'WHOLE_BLOOD',
+    batchNumber: data.batchNumber,
+    storageLocation: data.storageLocation,
+    notes: data.notes,
+  };
 
-    await checkAndAlertLowStock(orgId).catch(err => logger.error('Low stock alert error:', err));
-    return unit;
+  const unit = await inventoryRepo.create(orgId, unitData);
+
+  await auditRepo.log({
+    actorId: actorUser.id,
+    actorRole: actorUser.role,
+    action: AUDIT_EVENTS.INVENTORY_CREATED,
+    entityType: 'INVENTORY',
+    entityId: unit.id,
+    metadata: { bloodType: unit.blood_type, quantity: unit.quantity },
+  });
+
+  checkAndAlertLowStock(orgId).catch((err) => logger.error('Low stock check error', { error: err.message }));
+
+  return unit;
 }
 
 async function getInventoryUnits(orgId, reqQuery) {
-    const { limit, offset, page } = parsePagination(reqQuery);
-    const { data, count } = await inventoryRepo.findByOrganization(orgId, { limit, offset });
-    return buildPagination(data, count, page, limit);
+  const { limit, offset, page } = parsePagination(reqQuery);
+  const { bloodType, includeExpired } = reqQuery;
+
+  const result = await inventoryRepo.findByOrganization(orgId, {
+    bloodType,
+    includeExpired: includeExpired === 'true',
+    page,
+    limit,
+  });
+
+  return buildPagination(result.data, result.total, page, limit);
 }
 
 async function updateInventoryUnit(unitId, orgId, data, actorUser) {
-    if (actorUser.organizationId !== orgId) {
-        throw new AuthorizationError('Organization mismatch');
-    }
-    const unit = await inventoryRepo.findById(unitId);
-    if (!unit) throw new NotFoundError('Inventory unit not found');
-    if (unit.organizationId !== orgId) throw new AuthorizationError('Not authorized');
+  if (actorUser.organizationId && actorUser.organizationId !== orgId) {
+    throw new AuthorizationError('Organization mismatch');
+  }
 
-    if (data.quantity !== undefined && data.quantity < 0) {
-        throw new ValidationError('Quantity cannot be negative');
-    }
+  const unit = await inventoryRepo.findById(unitId);
+  if (!unit) throw new NotFoundError('Inventory unit not found');
+  if (unit.organization_id !== orgId) throw new AuthorizationError('You do not own this inventory unit');
 
-    const version = data.expectedVersion || unit.version;
-    const updated = await inventoryRepo.update(unitId, orgId, data, version);
+  if (data.quantity !== undefined && data.quantity < 0) {
+    throw new ValidationError('Quantity cannot be negative');
+  }
 
-    await auditRepo.logEvent(AUDIT_EVENTS.INVENTORY_UPDATED, {
-        actorId: actorUser.id,
-        targetId: unitId,
-        details: data
-    });
+  if (data.expiryDate && new Date(data.expiryDate) <= new Date()) {
+    throw new BusinessRuleError('Expiry date must be in the future');
+  }
 
-    await checkAndAlertLowStock(orgId).catch(err => logger.error('Low stock alert error:', err));
-    return updated;
+  const expectedVersion = data.expectedVersion !== undefined ? data.expectedVersion : unit.version;
+  const updated = await inventoryRepo.update(unitId, orgId, data, expectedVersion);
+
+  await auditRepo.log({
+    actorId: actorUser.id,
+    actorRole: actorUser.role,
+    action: AUDIT_EVENTS.INVENTORY_UPDATED,
+    entityType: 'INVENTORY',
+    entityId: unitId,
+    metadata: data,
+  });
+
+  checkAndAlertLowStock(orgId).catch((err) => logger.error('Low stock check error', { error: err.message }));
+
+  return updated;
 }
 
 async function deleteInventoryUnit(unitId, orgId, actorUser) {
-    if (actorUser.organizationId !== orgId) throw new AuthorizationError('Organization mismatch');
-    
-    const unit = await inventoryRepo.findById(unitId);
-    if (!unit) throw new NotFoundError('Inventory unit not found');
-    if (unit.organizationId !== orgId) throw new AuthorizationError('Not authorized');
+  if (actorUser.organizationId && actorUser.organizationId !== orgId) {
+    throw new AuthorizationError('Organization mismatch');
+  }
 
-    await inventoryRepo.delete(unitId, orgId);
+  const unit = await inventoryRepo.findById(unitId);
+  if (!unit) throw new NotFoundError('Inventory unit not found');
+  if (unit.organization_id !== orgId) throw new AuthorizationError('You do not own this inventory unit');
 
-    await auditRepo.logEvent(AUDIT_EVENTS.INVENTORY_DELETED, {
-        actorId: actorUser.id,
-        targetId: unitId
-    });
+  await inventoryRepo.delete(unitId, orgId);
 
-    return { message: 'Inventory unit deleted' };
+  await auditRepo.log({
+    actorId: actorUser.id,
+    actorRole: actorUser.role,
+    action: AUDIT_EVENTS.INVENTORY_DELETED,
+    entityType: 'INVENTORY',
+    entityId: unitId,
+    metadata: { bloodType: unit.blood_type, quantity: unit.quantity },
+  });
+
+  return { deleted: true, id: unitId };
 }
 
 async function getDashboard(orgId) {
-    const dashboard = await inventoryRepo.getDashboard(orgId);
-    return dashboard;
+  return inventoryRepo.getDashboard(orgId);
 }
 
+/**
+ * Check for low stock and create alerts if needed.
+ * Called after inventory create/update — fire and forget.
+ */
 async function checkAndAlertLowStock(orgId) {
-    const dashboard = await inventoryRepo.getDashboard(orgId);
-    const THRESHOLD = 10; // Simple fallback threshold
-    
-    for (const bt of dashboard.bloodTypes || []) {
-        if (bt.totalAvailable < THRESHOLD) {
-            const hasAlert = await query('SELECT id FROM low_stock_alerts WHERE organization_id = $1 AND blood_type = $2 AND resolved = false LIMIT 1', [orgId, bt.bloodType]);
-            if (hasAlert.rows.length === 0) {
-                await query('INSERT INTO low_stock_alerts (organization_id, blood_type, threshold, current_stock) VALUES ($1, $2, $3, $4)', [orgId, bt.bloodType, THRESHOLD, bt.totalAvailable]);
-                await notificationService.notifyLowStock(orgId, bt.bloodType, bt.totalAvailable);
-            }
-        }
+  try {
+    const orgResult = await query(
+      'SELECT low_stock_threshold FROM organizations WHERE id = $1',
+      [orgId]
+    );
+    const threshold = orgResult.rows[0]?.low_stock_threshold || 5;
+
+    const lowResult = await query(`
+      SELECT blood_type, SUM(units_available) as total_available
+      FROM blood_inventory
+      WHERE organization_id = $1 AND is_expired = false AND is_available = true
+      GROUP BY blood_type
+      HAVING SUM(units_available) <= $2
+    `, [orgId, threshold]);
+
+    for (const row of lowResult.rows) {
+      // Check for existing unresolved alert
+      const existing = await query(
+        `SELECT id FROM low_stock_alerts WHERE organization_id = $1 AND blood_type = $2 AND resolved_at IS NULL LIMIT 1`,
+        [orgId, row.blood_type]
+      );
+
+      if (existing.rows.length === 0) {
+        await query(
+          `INSERT INTO low_stock_alerts (organization_id, blood_type, threshold, current_stock) VALUES ($1, $2, $3, $4)`,
+          [orgId, row.blood_type, threshold, row.total_available]
+        );
+
+        // Trigger notification (fire and forget)
+        notificationService.notifyLowStockAlert({
+          orgId,
+          bloodType: row.blood_type,
+          currentStock: row.total_available,
+          threshold,
+        }).catch((err) => logger.warn('Low stock notification failed', { error: err.message }));
+
+        logger.info('Low stock alert created', { orgId, bloodType: row.blood_type, stock: row.total_available });
+      }
     }
+  } catch (err) {
+    logger.error('checkAndAlertLowStock failed', { error: err.message, orgId });
+  }
 }
 
 module.exports = {
-    createInventoryUnit,
-    getInventoryUnits,
-    updateInventoryUnit,
-    deleteInventoryUnit,
-    getDashboard,
-    checkAndAlertLowStock
+  createInventoryUnit,
+  getInventoryUnits,
+  updateInventoryUnit,
+  deleteInventoryUnit,
+  getDashboard,
+  checkAndAlertLowStock,
 };

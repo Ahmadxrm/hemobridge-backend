@@ -7,148 +7,218 @@ const notificationService = require('../integrations/notifications/notification.
 const { AuthorizationError, BusinessRuleError, NotFoundError } = require('../utils/errors');
 const { AUDIT_EVENTS, REQUEST_STATUS, REQUEST_TRANSITIONS } = require('../utils/constants');
 const { parsePagination, buildPagination } = require('../utils/helpers');
+const logger = require('../utils/logger');
 
 async function createRequest(data, actorUser) {
-    const org = await orgRepo.findById(actorUser.organizationId);
-    if (org.status !== 'VERIFIED') throw new AuthorizationError('Organization not verified');
+  // Get the org for this user
+  const org = await orgRepo.findByUserId(actorUser.id);
+  if (!org) throw new AuthorizationError('No organization found for this user');
+  if (org.status !== 'VERIFIED') {
+    throw new AuthorizationError('Your organization must be verified before creating emergency requests');
+  }
 
-    const request = await requestRepo.create({ ...data, requestingOrgId: org.id });
-    
-    await auditRepo.logEvent(AUDIT_EVENTS.REQUEST_CREATED, {
-        actorId: actorUser.id,
-        targetId: request.id,
-        details: { bloodType: data.bloodType, unitsNeeded: data.unitsNeeded }
-    });
+  const request = await requestRepo.create({
+    requestingOrgId: org.id,
+    bloodType: data.bloodType,
+    unitsNeeded: data.unitsNeeded,
+    urgency: data.urgency || 'URGENT',
+    patientInfo: data.patientInfo,
+    notes: data.notes,
+    fulfillingOrgId: data.fulfillingOrgId || null,
+  });
 
-    return request;
+  await auditRepo.log({
+    actorId: actorUser.id,
+    actorRole: actorUser.role,
+    action: AUDIT_EVENTS.REQUEST_CREATED,
+    entityType: 'EMERGENCY_REQUEST',
+    entityId: request.id,
+    metadata: { bloodType: data.bloodType, unitsNeeded: data.unitsNeeded, urgency: data.urgency },
+  });
+
+  // Notify fulfilling org if specified
+  if (data.fulfillingOrgId) {
+    notificationService.notifyOrganizationOfRequest({
+      orgId: data.fulfillingOrgId,
+      requestId: request.id,
+      bloodType: data.bloodType,
+      urgency: data.urgency,
+    }).catch((err) => logger.warn('Request notification failed', { error: err.message }));
+  }
+
+  return request;
 }
 
 async function getRequests(reqQuery, actorUser) {
-    const { limit, offset, page } = parsePagination(reqQuery);
-    
-    let filter = {};
-    if (actorUser.role === 'HOSPITAL' || actorUser.role === 'BLOOD_BANK') {
-        filter = { orgId: actorUser.organizationId };
-    } else if (actorUser.role !== 'ADMIN') {
-        throw new AuthorizationError('Unauthorized access');
-    }
+  const { limit, offset, page } = parsePagination(reqQuery);
+  const { status, bloodType } = reqQuery;
 
-    const { data, count } = await requestRepo.find(filter, { limit, offset });
-    return buildPagination(data, count, page, limit);
+  // Org users can only see requests involving their org
+  const orgId = actorUser.role !== 'ADMIN' ? actorUser.organizationId : null;
+
+  const result = await requestRepo.findAll({
+    orgId,
+    role: actorUser.role,
+    status,
+    bloodType,
+    page,
+    limit,
+  });
+
+  return buildPagination(result.data, result.total, page, limit);
 }
 
 async function getRequest(requestId, actorUser) {
-    const request = await requestRepo.findById(requestId);
-    if (!request) throw new NotFoundError('Request not found');
+  const request = await requestRepo.findById(requestId);
+  if (!request) throw new NotFoundError('Blood request not found');
 
-    const canView = actorUser.role === 'ADMIN' || 
-                    request.requestingOrgId === actorUser.organizationId || 
-                    request.fulfillingOrgId === actorUser.organizationId;
-                    
-    if (!canView) throw new AuthorizationError('Not authorized');
+  const canView =
+    actorUser.role === 'ADMIN' ||
+    request.requesting_org_id === actorUser.organizationId ||
+    request.fulfilling_org_id === actorUser.organizationId;
 
-    return request;
+  if (!canView) throw new AuthorizationError('Not authorized to view this request');
+
+  return request;
 }
 
 async function respondToRequest(requestId, data, actorUser) {
-    const request = await requestRepo.findById(requestId);
-    if (!request) throw new NotFoundError('Request not found');
-    if (request.status !== REQUEST_STATUS.PENDING) throw new BusinessRuleError('Request not pending');
-    
-    if (['HOSPITAL', 'BLOOD_BANK'].indexOf(actorUser.role) === -1) throw new AuthorizationError('Not authorized to respond');
-    if (request.requestingOrgId === actorUser.organizationId) throw new BusinessRuleError('Cannot respond to own request');
-    
-    if (data.status !== REQUEST_STATUS.APPROVED && data.status !== REQUEST_STATUS.REJECTED) {
-        throw new BusinessRuleError('Invalid response status');
-    }
+  const request = await requestRepo.findById(requestId);
+  if (!request) throw new NotFoundError('Blood request not found');
 
-    const updateData = { status: data.status, notes: data.responseNotes };
-    if (data.status === REQUEST_STATUS.APPROVED) {
-        updateData.fulfillingOrgId = actorUser.organizationId;
-    } else {
-        updateData.rejectionReason = data.rejectionReason;
-    }
+  // Only the fulfilling org (or admin) can respond
+  if (actorUser.role !== 'ADMIN' && request.fulfilling_org_id !== actorUser.organizationId) {
+    throw new AuthorizationError('Not authorized to respond to this request');
+  }
 
-    const updated = await requestRepo.updateStatus(requestId, updateData);
-    
-    await notificationService.notifyRequestStatusChanged(request.requestingOrgId, requestId, data.status);
-    
-    await auditRepo.logEvent(AUDIT_EVENTS.REQUEST_STATUS_CHANGED, {
-        actorId: actorUser.id,
-        targetId: requestId,
-        details: { status: data.status }
-    });
+  if (request.status !== REQUEST_STATUS.PENDING) {
+    throw new BusinessRuleError(`Cannot respond to a request with status: ${request.status}`);
+  }
 
-    return updated;
+  const newStatus = data.status; // APPROVED or REJECTED
+  const allowed = REQUEST_TRANSITIONS[request.status] || [];
+  if (!allowed.includes(newStatus)) {
+    throw new BusinessRuleError(`Invalid status transition from ${request.status} to ${newStatus}`);
+  }
+
+  const updated = await requestRepo.updateStatus(requestId, newStatus, {
+    respondedBy: actorUser.id,
+    responseNotes: data.responseNotes,
+    rejectionReason: data.rejectionReason,
+  });
+
+  await auditRepo.log({
+    actorId: actorUser.id,
+    actorRole: actorUser.role,
+    action: AUDIT_EVENTS.REQUEST_STATUS_CHANGED,
+    entityType: 'EMERGENCY_REQUEST',
+    entityId: requestId,
+    metadata: { previousStatus: request.status, newStatus, notes: data.responseNotes },
+  });
+
+  // Notify the requesting org
+  notificationService.notifyRequestStatusChanged({
+    orgId: request.requesting_org_id,
+    requestId,
+    newStatus,
+  }).catch((err) => logger.warn('Request status notification failed', { error: err.message }));
+
+  return updated;
 }
 
 async function updateRequestStatus(requestId, data, actorUser) {
-    const request = await requestRepo.findById(requestId);
-    if (!request) throw new NotFoundError('Request not found');
+  const request = await requestRepo.findById(requestId);
+  if (!request) throw new NotFoundError('Blood request not found');
 
-    const isRequesting = request.requestingOrgId === actorUser.organizationId;
-    const isFulfilling = request.fulfillingOrgId === actorUser.organizationId;
+  const canUpdate =
+    actorUser.role === 'ADMIN' ||
+    request.requesting_org_id === actorUser.organizationId ||
+    request.fulfilling_org_id === actorUser.organizationId;
 
-    if (!isRequesting && !isFulfilling) throw new AuthorizationError('Not authorized');
+  if (!canUpdate) throw new AuthorizationError('Not authorized to update this request');
 
-    const allowedTransitions = REQUEST_TRANSITIONS[request.status] || [];
-    if (!allowedTransitions.includes(data.status)) {
-        throw new BusinessRuleError('Invalid status transition');
-    }
+  const newStatus = data.status;
+  const allowed = REQUEST_TRANSITIONS[request.status] || [];
+  if (!allowed.includes(newStatus)) {
+    throw new BusinessRuleError(`Invalid status transition from ${request.status} to ${newStatus}`);
+  }
 
-    if (data.status === REQUEST_STATUS.IN_TRANSIT && !request.transferDetailsId) {
-        throw new BusinessRuleError('Transfer details required before in transit');
-    }
+  const updated = await requestRepo.updateStatus(requestId, newStatus, {});
 
-    const updated = await requestRepo.updateStatus(requestId, { status: data.status, notes: data.notes });
-    
-    if (data.status === REQUEST_STATUS.COMPLETED) {
-        await requestRepo.completeLifecycle(requestId);
-    }
+  await auditRepo.log({
+    actorId: actorUser.id,
+    actorRole: actorUser.role,
+    action: AUDIT_EVENTS.REQUEST_STATUS_CHANGED,
+    entityType: 'EMERGENCY_REQUEST',
+    entityId: requestId,
+    metadata: { previousStatus: request.status, newStatus, notes: data.notes },
+  });
 
-    const targetOrgId = isRequesting ? request.fulfillingOrgId : request.requestingOrgId;
-    if (targetOrgId) await notificationService.notifyRequestStatusChanged(targetOrgId, requestId, data.status);
-
-    await auditRepo.logEvent(AUDIT_EVENTS.REQUEST_STATUS_CHANGED, { actorId: actorUser.id, targetId: requestId, details: { status: data.status } });
-
-    return updated;
+  return updated;
 }
 
 async function addTransferDetails(requestId, data, actorUser) {
-    const request = await requestRepo.findById(requestId);
-    if (!request) throw new NotFoundError('Request not found');
-    if (request.status !== REQUEST_STATUS.APPROVED) throw new BusinessRuleError('Request must be approved');
-    if (request.fulfillingOrgId !== actorUser.organizationId) throw new AuthorizationError('Not authorized');
+  const request = await requestRepo.findById(requestId);
+  if (!request) throw new NotFoundError('Blood request not found');
 
-    const details = await requestRepo.addTransferDetails(requestId, data);
-    await requestRepo.updateStatus(requestId, { status: REQUEST_STATUS.IN_TRANSIT });
+  if (request.status !== REQUEST_STATUS.APPROVED) {
+    throw new BusinessRuleError('Can only add transfer details to an approved request');
+  }
 
-    await notificationService.notifyRequestStatusChanged(request.requestingOrgId, requestId, REQUEST_STATUS.IN_TRANSIT);
-    await auditRepo.logEvent(AUDIT_EVENTS.REQUEST_STATUS_CHANGED, { actorId: actorUser.id, targetId: requestId, details: { status: REQUEST_STATUS.IN_TRANSIT } });
+  const canAdd =
+    actorUser.role === 'ADMIN' ||
+    request.fulfilling_org_id === actorUser.organizationId;
 
-    return details;
+  if (!canAdd) throw new AuthorizationError('Not authorized to add transfer details');
+
+  const transfer = await requestRepo.addTransferDetails(requestId, {
+    courierName: data.courierName,
+    courierPhone: data.courierPhone,
+    vehicleNumber: data.vehicleNumber,
+    trackingReference: data.trackingReference,
+    dispatchedBy: actorUser.id,
+    estimatedArrival: data.estimatedArrival,
+    notes: data.notes,
+  });
+
+  // Move request to IN_TRANSIT
+  await requestRepo.updateStatus(requestId, REQUEST_STATUS.IN_TRANSIT, {});
+
+  return transfer;
 }
 
 async function confirmReceived(requestId, actorUser) {
-    const request = await requestRepo.findById(requestId);
-    if (!request) throw new NotFoundError('Request not found');
-    if (request.status !== REQUEST_STATUS.IN_TRANSIT) throw new BusinessRuleError('Request must be in transit');
-    if (request.requestingOrgId !== actorUser.organizationId) throw new AuthorizationError('Not authorized');
+  const request = await requestRepo.findById(requestId);
+  if (!request) throw new NotFoundError('Blood request not found');
 
-    const updated = await requestRepo.confirmReceived(requestId);
-    await notificationService.notifyRequestStatusChanged(request.fulfillingOrgId, requestId, REQUEST_STATUS.COMPLETED);
-    
-    await auditRepo.logEvent(AUDIT_EVENTS.REQUEST_STATUS_CHANGED, { actorId: actorUser.id, targetId: requestId, details: { status: REQUEST_STATUS.COMPLETED } });
-    
-    return updated;
+  if (request.status !== REQUEST_STATUS.IN_TRANSIT) {
+    throw new BusinessRuleError('Can only confirm receipt for an in-transit request');
+  }
+
+  if (actorUser.role !== 'ADMIN' && request.requesting_org_id !== actorUser.organizationId) {
+    throw new AuthorizationError('Only the requesting organization can confirm receipt');
+  }
+
+  const updated = await requestRepo.confirmReceived(requestId, actorUser.id, null);
+
+  await auditRepo.log({
+    actorId: actorUser.id,
+    actorRole: actorUser.role,
+    action: AUDIT_EVENTS.REQUEST_STATUS_CHANGED,
+    entityType: 'EMERGENCY_REQUEST',
+    entityId: requestId,
+    metadata: { newStatus: 'COMPLETED' },
+  });
+
+  return updated;
 }
 
 module.exports = {
-    createRequest,
-    getRequests,
-    getRequest,
-    respondToRequest,
-    updateRequestStatus,
-    addTransferDetails,
-    confirmReceived
+  createRequest,
+  getRequests,
+  getRequest,
+  respondToRequest,
+  updateRequestStatus,
+  addTransferDetails,
+  confirmReceived,
 };

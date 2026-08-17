@@ -89,6 +89,50 @@ function buildUpdateSet(data, startIndex = 1) {
 }
 
 /**
+ * Build a pagination metadata object.
+ * Accepts either (data, total, page, limit) positional args
+ * OR a single options object { page, limit, total }.
+ */
+function buildPagination(dataOrOpts, total, page, limit) {
+  // Support both calling styles:
+  // buildPagination({ page, limit, total })  – named opts
+  // buildPagination(data, count, page, limit) – positional (legacy)
+  if (arguments.length === 1 && typeof dataOrOpts === 'object' && !Array.isArray(dataOrOpts)) {
+    // Named options: { page, limit, total, data? }
+    const opts = dataOrOpts;
+    const p = opts.page || 1;
+    const l = opts.limit || PAGINATION.DEFAULT_LIMIT;
+    const t = opts.total || 0;
+    const totalPages = Math.ceil(t / l) || 1;
+    return {
+      data: opts.data,
+      pagination: {
+        page: p,
+        limit: l,
+        total: t,
+        totalPages,
+        hasNextPage: p < totalPages,
+        hasPrevPage: p > 1,
+      },
+    };
+  }
+
+  // Positional: buildPagination(data, count, page, limit)
+  const totalPages = Math.ceil(total / limit) || 1;
+  return {
+    data: dataOrOpts,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  };
+}
+
+/**
  * Check if a value is a valid UUID v4.
  */
 function isValidUUID(value) {
@@ -123,6 +167,7 @@ module.exports = {
   sanitizeUser,
   sanitizeDonor,
   buildUpdateSet,
+  buildPagination,
   isValidUUID,
   sleep,
   getClientIp,

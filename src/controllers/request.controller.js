@@ -15,7 +15,7 @@ exports.createRequest = async (req, res, next) => {
 exports.getRequests = async (req, res, next) => {
   try {
     const result = await requestService.getRequests(req.query, req.user);
-    return sendPaginated(res, 200, 'Requests fetched successfully', result.data, result.meta);
+    return sendPaginated(res, 200, 'Requests fetched successfully', result.data, result.pagination);
   } catch (err) {
     next(err);
   }

@@ -11,6 +11,7 @@ const logger = require('../utils/logger');
  * Authenticate a request using the Bearer JWT token.
  * Attaches the decoded user payload to req.user.
  * Verifies the token has not been invalidated (blacklisted).
+ * Also attaches organizationId for HOSPITAL/BLOOD_BANK users.
  */
 async function authenticate(req, res, next) {
   try {
@@ -71,6 +72,17 @@ async function authenticate(req, res, next) {
       jti: decoded.jti,
     };
 
+    // For organisation users, attach organizationId so services can use it
+    if (user.role === 'HOSPITAL' || user.role === 'BLOOD_BANK') {
+      const orgResult = await query(
+        'SELECT id FROM organizations WHERE user_id = $1 LIMIT 1',
+        [user.id]
+      );
+      if (orgResult.rows.length > 0) {
+        req.user.organizationId = orgResult.rows[0].id;
+      }
+    }
+
     next();
   } catch (err) {
     next(err);
@@ -109,6 +121,7 @@ function generateAccessToken(user) {
 
 /**
  * Register a new session in the sessions table.
+ * Returns the session expiry date.
  */
 async function createSession(userId, jti, req) {
   // Calculate expiry from the JWT expiry setting

@@ -24,7 +24,7 @@ exports.updateUserStatus = async (req, res, next) => {
 exports.getAuditLogs = async (req, res, next) => {
   try {
     const result = await adminService.getAuditLogs(req.query);
-    return sendPaginated(res, 200, 'Audit logs fetched successfully', result.data, result.meta);
+    return sendPaginated(res, 200, 'Audit logs fetched successfully', result.logs, result.pagination);
   } catch (err) {
     next(err);
   }
@@ -42,7 +42,7 @@ exports.getSystemStatus = async (req, res, next) => {
 exports.getOrganizations = async (req, res, next) => {
   try {
     const result = await adminService.getOrganizations(req.query);
-    return sendPaginated(res, 200, 'Organizations fetched successfully', result.data, result.meta);
+    return sendPaginated(res, 200, 'Organizations fetched successfully', result.organizations, result.pagination);
   } catch (err) {
     next(err);
   }

@@ -33,7 +33,7 @@ exports.updateAvailability = async (req, res, next) => {
 exports.getHistory = async (req, res, next) => {
   try {
     const result = await donorService.getDonorHistory(req.params.id, req.query, req.user);
-    return sendPaginated(res, 200, 'History fetched successfully', result.data, result.meta);
+    return sendPaginated(res, 200, 'History fetched successfully', result.data, result.pagination);
   } catch (err) {
     next(err);
   }
