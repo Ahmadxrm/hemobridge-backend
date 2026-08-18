@@ -64,7 +64,7 @@ function sanitizeUser(user) {
 function sanitizeDonor(donor, includePrivate = false) {
   if (!donor) return null;
   if (includePrivate) return donor;
-  const { phone, email, date_of_birth, address, lga, ...publicFields } = donor;
+  const { phone, user_phone, email, user_email, date_of_birth, address, lga, ...publicFields } = donor;
   return publicFields;
 }
 

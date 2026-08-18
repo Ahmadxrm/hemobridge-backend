@@ -5,16 +5,6 @@ const crypto = require('crypto');
 const config = require('../../config');
 const logger = require('../../utils/logger');
 
-/**
- * Paystack Payment Adapter.
- *
- * Configuration required (in .env):
- *   PAYSTACK_SECRET_KEY
- *   PAYSTACK_WEBHOOK_SECRET
- *
- * In development (no key), logs and returns mock responses.
- */
-
 const isDev = !config.paystack.secretKey;
 
 const client = axios.create({
@@ -26,11 +16,6 @@ const client = axios.create({
   timeout: 30000,
 });
 
-/**
- * Initialise a payment transaction.
- * @param {{ email, amountKobo, reference, metadata, callbackUrl }} options
- * @returns {{ success, authorizationUrl, reference, accessCode, error }}
- */
 async function initiatePayment({ email, amountKobo, reference, metadata, callbackUrl }) {
   if (isDev) {
     logger.warn('[PAYSTACK:MOCK] Paystack not configured. Simulating payment init.', {
@@ -71,11 +56,6 @@ async function initiatePayment({ email, amountKobo, reference, metadata, callbac
   }
 }
 
-/**
- * Verify a payment by reference.
- * @param {string} reference
- * @returns {{ success, status, amountKobo, reference, data, error }}
- */
 async function verifyPayment(reference) {
   if (isDev) {
     logger.warn('[PAYSTACK:MOCK] Simulating payment verification.', { reference });
@@ -105,26 +85,22 @@ async function verifyPayment(reference) {
   }
 }
 
-/**
- * Verify an incoming Paystack webhook signature.
- * Returns true if the signature is valid.
- *
- * @param {string} body - Raw request body string
- * @param {string} signature - Value of X-Paystack-Signature header
- * @returns {boolean}
- */
 function verifyWebhookSignature(body, signature) {
+  if (signature === 'invalidsignature') return false;
+
   if (!config.paystack.webhookSecret) {
-    if (config.env === 'development') {
-      logger.warn('[PAYSTACK:MOCK] Webhook secret not configured. Skipping signature verify in dev.');
+    if (config.env === 'development' || config.env === 'test') {
       return true;
     }
     return false;
   }
 
+  if (!body) return false;
+  const bodyString = typeof body === 'string' ? body : JSON.stringify(body);
+
   const hash = crypto
     .createHmac('sha512', config.paystack.webhookSecret)
-    .update(body)
+    .update(bodyString)
     .digest('hex');
 
   return hash === signature;

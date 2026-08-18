@@ -6,7 +6,7 @@ const auditRepo = require('../repositories/audit.repository');
 const notificationService = require('../integrations/notifications/notification.service');
 const { AuthorizationError, BusinessRuleError, NotFoundError } = require('../utils/errors');
 const { AUDIT_EVENTS, REQUEST_STATUS, REQUEST_TRANSITIONS } = require('../utils/constants');
-const { parsePagination, buildPagination } = require('../utils/helpers');
+const { parsePagination, buildPagination, combineBloodType } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
 async function createRequest(data, actorUser) {
@@ -17,14 +17,21 @@ async function createRequest(data, actorUser) {
     throw new AuthorizationError('Your organization must be verified before creating emergency requests');
   }
 
+  const bloodType = data.bloodType || (data.bloodGroup && data.rhesusFactor ? combineBloodType(data.bloodGroup, data.rhesusFactor) : null);
+  const unitsNeeded = data.unitsNeeded || data.unitsRequired;
+  let urgency = data.urgency || data.urgencyLevel || 'URGENT';
+  if (urgency === 'HIGH') urgency = 'CRITICAL';
+  if (urgency === 'NORMAL') urgency = 'ROUTINE';
+  const fulfillingOrgId = data.fulfillingOrgId || data.targetBloodBankId || null;
+
   const request = await requestRepo.create({
     requestingOrgId: org.id,
-    bloodType: data.bloodType,
-    unitsNeeded: data.unitsNeeded,
-    urgency: data.urgency || 'URGENT',
+    bloodType,
+    unitsNeeded,
+    urgency,
     patientInfo: data.patientInfo,
     notes: data.notes,
-    fulfillingOrgId: data.fulfillingOrgId || null,
+    fulfillingOrgId,
   });
 
   await auditRepo.log({
@@ -33,16 +40,16 @@ async function createRequest(data, actorUser) {
     action: AUDIT_EVENTS.REQUEST_CREATED,
     entityType: 'EMERGENCY_REQUEST',
     entityId: request.id,
-    metadata: { bloodType: data.bloodType, unitsNeeded: data.unitsNeeded, urgency: data.urgency },
+    metadata: { bloodType, unitsNeeded, urgency },
   });
 
   // Notify fulfilling org if specified
-  if (data.fulfillingOrgId) {
+  if (fulfillingOrgId) {
     notificationService.notifyOrganizationOfRequest({
-      orgId: data.fulfillingOrgId,
+      orgId: fulfillingOrgId,
       requestId: request.id,
-      bloodType: data.bloodType,
-      urgency: data.urgency,
+      bloodType,
+      urgency,
     }).catch((err) => logger.warn('Request notification failed', { error: err.message }));
   }
 
@@ -143,7 +150,13 @@ async function updateRequestStatus(requestId, data, actorUser) {
     throw new BusinessRuleError(`Invalid status transition from ${request.status} to ${newStatus}`);
   }
 
-  const updated = await requestRepo.updateStatus(requestId, newStatus, {});
+  const updateOpts = {
+    respondedBy: actorUser.id,
+    responseNotes: data.responseNotes || data.notes,
+    rejectionReason: data.rejectionReason,
+  };
+
+  const updated = await requestRepo.updateStatus(requestId, newStatus, updateOpts);
 
   await auditRepo.log({
     actorId: actorUser.id,

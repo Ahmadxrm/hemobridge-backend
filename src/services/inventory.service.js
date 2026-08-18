@@ -5,7 +5,7 @@ const auditRepo = require('../repositories/audit.repository');
 const notificationService = require('../integrations/notifications/notification.service');
 const { AuthorizationError, BusinessRuleError, ValidationError, NotFoundError } = require('../utils/errors');
 const { AUDIT_EVENTS } = require('../utils/constants');
-const { parsePagination, buildPagination } = require('../utils/helpers');
+const { parsePagination, buildPagination, combineBloodType } = require('../utils/helpers');
 const { query } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -19,8 +19,13 @@ async function createInventoryUnit(orgId, data, actorUser) {
     throw new BusinessRuleError('Expiry date must be in the future');
   }
 
+  const bloodType = data.bloodType || (data.bloodGroup && data.rhesusFactor ? combineBloodType(data.bloodGroup, data.rhesusFactor) : null);
+  if (!bloodType) {
+    throw new ValidationError('Blood type is required');
+  }
+
   const unitData = {
-    bloodType: data.bloodType,
+    bloodType,
     quantity: data.quantity,
     unitsAvailable: data.quantity,
     expiryDate: data.expiryDate,

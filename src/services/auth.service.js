@@ -186,7 +186,16 @@ const registerDonor = async (data, req) => {
 
 // ── OTP ────────────────────────────────────────────────────────────────────
 
-const sendOTP = async ({ userId, purpose }) => {
+const sendOTP = async (data) => {
+  let { userId, email, purpose, type } = data;
+  purpose = purpose || type || OTP_PURPOSE.EMAIL_VERIFICATION;
+
+  if (!userId && email) {
+    const userByEmail = await userRepo.findByEmail(email);
+    if (!userByEmail) throw new NotFoundError('User not found');
+    userId = userByEmail.id;
+  }
+
   const user = await userRepo.findById(userId);
   if (!user) throw new NotFoundError('User not found');
 
@@ -236,7 +245,16 @@ const sendOTP = async ({ userId, purpose }) => {
   return { message: 'OTP sent successfully' };
 };
 
-const verifyOTP = async ({ userId, otp, purpose }) => {
+const verifyOTP = async (data) => {
+  let { userId, email, otp, purpose, type } = data;
+  purpose = purpose || type || OTP_PURPOSE.EMAIL_VERIFICATION;
+
+  if (!userId && email) {
+    const userByEmail = await userRepo.findByEmail(email);
+    if (!userByEmail) throw new ValidationError('Invalid OTP code');
+    userId = userByEmail.id;
+  }
+
   const record = await otpRepo.findLatest(userId, purpose);
 
   if (!record) throw new ValidationError('No pending OTP found for this purpose');
@@ -246,7 +264,12 @@ const verifyOTP = async ({ userId, otp, purpose }) => {
 
   await otpRepo.incrementAttempts(record.id);
 
-  const isValid = await verifyOTPHash(record.otp_hash, otp);
+  let isValid = false;
+  try {
+    isValid = await verifyOTPHash(record.otp_hash, otp);
+  } catch (err) {
+    isValid = false;
+  }
   if (!isValid) throw new ValidationError('Invalid OTP code');
 
   await otpRepo.markUsed(record.id);
@@ -356,7 +379,11 @@ const getMe = async (userId) => {
   const user = await userRepo.findById(userId);
   if (!user) throw new NotFoundError('User not found');
 
-  const profile = { user: sanitizeUser(user) };
+  const safeUser = sanitizeUser(user);
+  const profile = {
+    ...safeUser,
+    user: safeUser,
+  };
 
   if (user.role === ROLES.HOSPITAL || user.role === ROLES.BLOOD_BANK) {
     profile.organization = await orgRepo.findByUserId(userId);

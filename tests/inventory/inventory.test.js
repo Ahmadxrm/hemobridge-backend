@@ -15,11 +15,9 @@ describe('Inventory API', () => {
     const { user, token } = await createTestUser('HOSPITAL');
     orgToken = token;
     
-    // Create organization
+    // Retrieve linked organization
     const orgRes = await query(
-      `INSERT INTO organizations (user_id, name, type, address, state, city)
-       VALUES ($1, 'Test Hospital', 'HOSPITAL', '123 Test St', 'Lagos', 'Lagos')
-       RETURNING id`,
+      `SELECT id FROM organizations WHERE user_id = $1`,
       [user.id]
     );
     orgId = orgRes.rows[0].id;
@@ -35,7 +33,7 @@ describe('Inventory API', () => {
   it('should create an inventory unit', async () => {
     const res = await request(app)
       .post('/api/v1/inventory/units')
-      .set('Authorization', \`Bearer \${orgToken}\`)
+      .set('Authorization', `Bearer ${orgToken}`)
       .send({
         bloodGroup: 'O',
         rhesusFactor: 'positive',
@@ -52,38 +50,38 @@ describe('Inventory API', () => {
   it('should get inventory units', async () => {
     const res = await request(app)
       .get('/api/v1/inventory/units')
-      .set('Authorization', \`Bearer \${orgToken}\`);
+      .set('Authorization', `Bearer ${orgToken}`);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data)).toBe(true);
   });
 
   it('should update an inventory unit', async () => {
     const res = await request(app)
-      .patch(\`/api/v1/inventory/units/\${inventoryUnitId}\`)
-      .set('Authorization', \`Bearer \${orgToken}\`)
+      .patch(`/api/v1/inventory/units/${inventoryUnitId}`)
+      .set('Authorization', `Bearer ${orgToken}`)
       .send({ quantity: 5 });
     expect(res.status).toBe(200);
   });
 
   it('should reject negative quantity in update', async () => {
     const res = await request(app)
-      .patch(\`/api/v1/inventory/units/\${inventoryUnitId}\`)
-      .set('Authorization', \`Bearer \${orgToken}\`)
+      .patch(`/api/v1/inventory/units/${inventoryUnitId}`)
+      .set('Authorization', `Bearer ${orgToken}`)
       .send({ quantity: -1 });
     expect([400, 422]).toContain(res.status);
   });
 
   it('should delete an inventory unit', async () => {
     const res = await request(app)
-      .delete(\`/api/v1/inventory/units/\${inventoryUnitId}\`)
-      .set('Authorization', \`Bearer \${orgToken}\`);
+      .delete(`/api/v1/inventory/units/${inventoryUnitId}`)
+      .set('Authorization', `Bearer ${orgToken}`);
     expect(res.status).toBe(200);
   });
 
   it('should reject inventory creation by donor', async () => {
     const res = await request(app)
       .post('/api/v1/inventory/units')
-      .set('Authorization', \`Bearer \${donorToken}\`)
+      .set('Authorization', `Bearer ${donorToken}`)
       .send({
         bloodGroup: 'O',
         rhesusFactor: 'positive',
@@ -99,7 +97,7 @@ describe('Inventory API', () => {
   it('should get dashboard', async () => {
     const res = await request(app)
       .get('/api/v1/inventory/dashboard')
-      .set('Authorization', \`Bearer \${orgToken}\`);
+      .set('Authorization', `Bearer ${orgToken}`);
     expect(res.status).toBe(200);
   });
 
@@ -107,7 +105,7 @@ describe('Inventory API', () => {
     // Re-create a unit for org 1
     const createRes = await request(app)
       .post('/api/v1/inventory/units')
-      .set('Authorization', \`Bearer \${orgToken}\`)
+      .set('Authorization', `Bearer ${orgToken}`)
       .send({
         bloodGroup: 'A',
         rhesusFactor: 'negative',
@@ -120,17 +118,12 @@ describe('Inventory API', () => {
     const unitId = createRes.body.data.id;
 
     // Create org 2
-    const { user: user2, token: token2 } = await createTestUser('HOSPITAL');
-    await query(
-      `INSERT INTO organizations (user_id, name, type, address, state, city)
-       VALUES ($1, 'Another Hospital', 'HOSPITAL', '123 Test St', 'Lagos', 'Lagos')`,
-      [user2.id]
-    );
+    const { token: token2 } = await createTestUser('HOSPITAL');
 
     // Update with org 2 token
     const res = await request(app)
-      .patch(\`/api/v1/inventory/units/\${unitId}\`)
-      .set('Authorization', \`Bearer \${token2}\`)
+      .patch(`/api/v1/inventory/units/${unitId}`)
+      .set('Authorization', `Bearer ${token2}`)
       .send({ quantity: 2 });
     expect(res.status).toBe(403);
   });

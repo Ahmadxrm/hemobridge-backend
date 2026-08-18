@@ -24,7 +24,7 @@ const findLatest = async (userId, purpose) => {
 const markUsed = async (id) => {
   const result = await query(`
     UPDATE otps
-    SET is_used = true, verified_at = NOW(), updated_at = NOW()
+    SET is_used = true, verified_at = NOW()
     WHERE id = $1
     RETURNING *
   `, [id]);
@@ -34,7 +34,7 @@ const markUsed = async (id) => {
 const incrementAttempts = async (id) => {
   const result = await query(`
     UPDATE otps
-    SET attempts = attempts + 1, updated_at = NOW()
+    SET attempts = attempts + 1
     WHERE id = $1
     RETURNING *
   `, [id]);
@@ -68,7 +68,7 @@ const findResetToken = async (tokenHash) => {
 const markResetTokenUsed = async (id) => {
   const result = await query(`
     UPDATE password_reset_tokens
-    SET is_used = true, used_at = NOW(), updated_at = NOW()
+    SET is_used = true, used_at = NOW()
     WHERE id = $1
     RETURNING *
   `, [id]);

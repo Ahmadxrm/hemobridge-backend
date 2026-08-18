@@ -31,14 +31,14 @@ const registerDonorSchema = Joi.object({
   phone: Joi.string().required(),
   password: Joi.string().min(8).max(128).required(),
   bloodGroup: Joi.string().valid('A', 'B', 'AB', 'O').required(),
-  rhesusFactor: Joi.string().valid('positive', 'negative').required(),
+  rhesusFactor: Joi.string().valid('positive', 'negative', '+', '-').required(),
   dateOfBirth: Joi.date().iso().optional(),
   gender: Joi.string().valid('MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY').optional(),
   address: Joi.string().optional(),
   lga: Joi.string().optional(),
   state: Joi.string().optional(),
   preferredChannel: Joi.string().valid('SMS', 'WHATSAPP', 'EMAIL', 'VOICE', 'IN_APP').default('SMS'),
-  consentGiven: Joi.boolean().valid(true).required(),
+  consentGiven: Joi.boolean().required(),
   dataSharingConsent: Joi.boolean().default(false),
   healthInformation: Joi.string().optional(),
 });
@@ -49,15 +49,19 @@ const loginSchema = Joi.object({
 });
 
 const sendOtpSchema = Joi.object({
-  userId: Joi.string().uuid().required(),
-  purpose: Joi.string().valid('EMAIL_VERIFICATION', 'PHONE_VERIFICATION', 'PASSWORD_RESET', 'LOGIN_2FA').required(),
-});
+  userId: Joi.string().uuid().optional(),
+  email: Joi.string().email().optional(),
+  purpose: Joi.string().valid('EMAIL_VERIFICATION', 'PHONE_VERIFICATION', 'PASSWORD_RESET', 'LOGIN_2FA').optional(),
+  type: Joi.string().valid('EMAIL_VERIFICATION', 'PHONE_VERIFICATION', 'PASSWORD_RESET', 'LOGIN_2FA').optional(),
+}).or('userId', 'email');
 
 const verifyOtpSchema = Joi.object({
-  userId: Joi.string().uuid().required(),
+  userId: Joi.string().uuid().optional(),
+  email: Joi.string().email().optional(),
   otp: Joi.string().length(6).pattern(/^\d+$/).required(),
-  purpose: Joi.string().valid('EMAIL_VERIFICATION', 'PHONE_VERIFICATION', 'PASSWORD_RESET', 'LOGIN_2FA').required(),
-});
+  purpose: Joi.string().valid('EMAIL_VERIFICATION', 'PHONE_VERIFICATION', 'PASSWORD_RESET', 'LOGIN_2FA').optional(),
+  type: Joi.string().valid('EMAIL_VERIFICATION', 'PHONE_VERIFICATION', 'PASSWORD_RESET', 'LOGIN_2FA').optional(),
+}).or('userId', 'email');
 
 const forgotPasswordSchema = Joi.object({
   email: Joi.string().email().required(),

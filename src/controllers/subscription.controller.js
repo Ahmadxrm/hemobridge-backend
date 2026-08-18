@@ -46,8 +46,9 @@ exports.getPayments = async (req, res, next) => {
 
 exports.webhook = async (req, res, next) => {
   try {
-    // Expected to get raw body from req.rawBody handled upstream
-    await subscriptionService.processPaystackWebhook(req.body, req.rawBody, req.headers['x-paystack-signature']);
+    const signature = req.headers['x-paystack-signature'];
+    const rawBody = req.rawBody || JSON.stringify(req.body);
+    await subscriptionService.processPaystackWebhook(req.body, rawBody, signature);
     return res.status(200).json({ received: true });
   } catch (err) {
     next(err);

@@ -104,6 +104,7 @@ const findNearby = async ({ bloodType, lat, lng, radiusMeters, status = 'VERIFIE
       AND bi.is_available = true
       AND bi.is_expired = false
       AND bi.expiry_date > NOW()
+      AND o.location IS NOT NULL
       AND ST_DWithin(o.location, ST_MakePoint($2, $3)::geography, $5)
     ORDER BY distance_meters ASC
   `, [status, lng, lat, bloodType, radiusMeters]);

@@ -28,10 +28,13 @@ async function getPlans() {
  * Create a subscription for an organisation.
  * For the MVP, initiates a Paystack payment if the plan has a cost.
  */
-async function createSubscription({ orgId, planId }, actorUser, req) {
+async function createSubscription(data, actorUser, req) {
   // Find the org
   const org = await orgRepo.findByUserId(actorUser.id);
   if (!org) throw new NotFoundError('Organisation not found');
+
+  const orgId = data.orgId || org.id;
+  const planId = data.planId;
 
   // Only allow orgs to subscribe for themselves
   if (org.id !== orgId && actorUser.role !== 'ADMIN') {

@@ -37,27 +37,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Paystack-Signature'],
 }));
 
-// ── Raw body capture for Paystack webhook signature verification ───────────
-// Must come BEFORE express.json() for the webhook route only.
-app.use('/api/v1/payments/webhook', (req, res, next) => {
-  let data = '';
-  req.setEncoding('utf8');
-  req.on('data', (chunk) => {
-    data += chunk;
-  });
-  req.on('end', () => {
-    req.rawBody = data;
-    try {
-      req.body = JSON.parse(data);
-    } catch {
-      req.body = {};
-    }
-    next();
-  });
-});
-
-// ── Body parsing ───────────────────────────────────────────────────────────
-app.use(express.json({ limit: '1mb' }));
+// ── Body parsing (with rawBody capture for webhook signature verification) ──
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf ? buf.toString('utf8') : '';
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // ── Request logging ────────────────────────────────────────────────────────
@@ -101,10 +87,7 @@ app.use(`${API_PREFIX}/requests`,          requestRoutes);
 app.use(`${API_PREFIX}/donors`,            donorRoutes);
 app.use(`${API_PREFIX}/donation-requests`, donationRoutes);
 app.use(`${API_PREFIX}/notifications`,     notificationRoutes);
-app.use(`${API_PREFIX}/plans`,             subscriptionRoutes);   // GET /plans
-app.use(`${API_PREFIX}/subscriptions`,     subscriptionRoutes);   // POST /subscriptions
-app.use(`${API_PREFIX}/organizations`,     subscriptionRoutes);   // GET /organizations/:id/payments
-app.use(`${API_PREFIX}/payments`,          subscriptionRoutes);   // POST /payments/webhook
+app.use(`${API_PREFIX}`,                   subscriptionRoutes);
 app.use(`${API_PREFIX}/admin`,             adminRoutes);
 
 // Also mount notification-preferences under /users (legacy path)

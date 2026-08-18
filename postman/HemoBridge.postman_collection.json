@@ -26,7 +26,7 @@
           "name": "Health Check",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/../health"
+            "url": "http://localhost:5000/health"
           }
         }
       ]

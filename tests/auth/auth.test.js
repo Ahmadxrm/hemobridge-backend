@@ -1,7 +1,6 @@
 'use strict';
 
 const { app, request, clearTestData, createTestUser, query, pool } = require('../helpers/testSetup');
-const { v4: uuidv4 } = require('uuid');
 
 describe('Authentication API', () => {
   jest.setTimeout(30000);
@@ -14,7 +13,7 @@ describe('Authentication API', () => {
     await pool.end();
   });
 
-  const uniqueEmail = () => `test-${Date.now()}@test.com`;
+  const uniqueEmail = () => `test-${Date.now()}-${Math.floor(Math.random() * 10000)}@test.com`;
 
   it('should register a hospital organisation', async () => {
     const res = await request(app)
@@ -110,6 +109,7 @@ describe('Authentication API', () => {
   it('should reject login for pending org', async () => {
     const { user } = await createTestUser('HOSPITAL');
     await query(`UPDATE users SET status = 'PENDING_VERIFICATION' WHERE id = $1`, [user.id]);
+    await query(`UPDATE organizations SET status = 'PENDING_VERIFICATION' WHERE user_id = $1`, [user.id]);
     
     const res = await request(app)
       .post('/api/v1/auth/login')
@@ -124,7 +124,7 @@ describe('Authentication API', () => {
     const { token } = await createTestUser('DONOR');
     const res = await request(app)
       .get('/api/v1/auth/me')
-      .set('Authorization', \`Bearer \${token}\`);
+      .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBeDefined();
   });
@@ -140,13 +140,13 @@ describe('Authentication API', () => {
     // Attempt to send OTP
     const sendRes = await request(app)
       .post('/api/v1/auth/otp/send')
-      .send({ email: user.email, type: 'EMAIL_VERIFICATION' });
+      .send({ userId: user.id, purpose: 'EMAIL_VERIFICATION' });
     expect(sendRes.status).toBe(200);
 
     // Verify OTP with wrong code
     const verifyRes = await request(app)
       .post('/api/v1/auth/otp/verify')
-      .send({ email: user.email, otp: '000000', type: 'EMAIL_VERIFICATION' });
+      .send({ userId: user.id, otp: '000000', purpose: 'EMAIL_VERIFICATION' });
     expect(verifyRes.status).toBe(400);
   });
 });
